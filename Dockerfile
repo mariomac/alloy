@@ -17,10 +17,10 @@ ARG GOEXPERIMENT
 COPY . /src/alloy
 WORKDIR /src/alloy
 
-# Build the UI before building Alloy, which will then bake the final UI into
-# the binary.
-RUN --mount=type=cache,target=/src/alloy/web/ui/node_modules,sharing=locked \
-   make generate-ui
+## Build the UI before building Alloy, which will then bake the final UI into
+## the binary.
+#RUN --mount=type=cache,target=/src/alloy/web/ui/node_modules,sharing=locked \
+#   make generate-ui
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     GOEXPERIMENT=${GOEXPERIMENT} \
     make alloy
 
-FROM public.ecr.aws/ubuntu/ubuntu:noble
+FROM ubuntu:noble
 
 # Username and uid for alloy user
 ARG UID=473

@@ -199,7 +199,8 @@ endif
 images: alloy-image
 
 alloy-image:
-	DOCKER_BUILDKIT=1 docker build $(DOCKER_FLAGS) -t $(ALLOY_IMAGE) -f Dockerfile .
+	echo ${USE_CONTAINER}
+	USE_CONTAINER=1 DOCKER_BUILDKIT=1 docker build $(DOCKER_FLAGS) -t $(ALLOY_IMAGE) -f Dockerfile .
 
 .PHONY: images-windows alloy-image-windows
 images: alloy-image-windows

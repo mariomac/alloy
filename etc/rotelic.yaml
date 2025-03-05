@@ -1,0 +1,60 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: rotelic
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rotelic
+  namespace: rotelic
+  labels:
+    app: rotelic
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rotelic
+  template:
+    metadata:
+      labels:
+        app: rotelic
+    spec:
+      volumes:
+        - name: alloy-cfg
+          configMap:
+            name: alloy-cfg
+      containers:
+      - name: rotelic
+        image: mariomac/rotelic:dev
+        ports:
+        - containerPort: 4444
+        - containerPort: 8001
+        env:
+          - name: ALLOY_CONFIG_PATH
+            value: "/config/alloy-cfg.river"
+        envFrom:
+          - secretRef:
+              name: grafana-secret
+        args: ["run", "--stability.level", "experimental", "/config/alloy-cfg.river"]
+        volumeMounts:
+          - mountPath: /config
+            name: alloy-cfg
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fake-collector
+  namespace: rotelic
+  labels:
+    app: rotelic
+spec:
+  ports:
+  - name: fake-collector
+    port: 4444
+    targetPort: 4444
+  - name: fake-agent
+    port: 8001
+    targetPort: 8001
+  selector:
+    app: rotelic

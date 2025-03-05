@@ -8,10 +8,13 @@ import (
 	"net/http"
 )
 
+/* TODO: restore
 //go:generate yarn
 //go:generate yarn run build
 
 //go:embed build
+
+ */
 var builtinAssetsTarball embed.FS
 
 // Assets contains the UI's assets.

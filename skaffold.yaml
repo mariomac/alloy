@@ -1,0 +1,14 @@
+apiVersion: skaffold/v4beta12
+kind: Config
+metadata:
+  name: rotelic
+build:
+  artifacts:
+    - image: mariomac/rotelic
+      docker:
+        dockerfile: Dockerfile
+manifests:
+  rawYaml:
+    - etc/rotelic-config.yaml
+    - etc/grafana-credentials.yml
+    - etc/rotelic.yaml
