@@ -10,8 +10,12 @@ metadata:
   namespace: rotelic
 data:
   alloy-cfg.river: |
+    logging {
+      level  = "debug"
+    }
+    
     otelcol.receiver.nria "default" {
-      port = 4444
+      endpoint = ":4444"
           
       output {
         metrics = [otelcol.processor.batch.default.input]
@@ -28,7 +32,7 @@ data:
     
     otelcol.exporter.otlphttp "default" {
       client {
-        endpoint = "https://otlp-gateway-prod-eu-west-2.grafana.net/otlp"
+        endpoint = "https://otlp-gateway-prod-eu-west-0.grafana.net/otlp"
         auth     = otelcol.auth.basic.grafana_cloud.handler
       }
     }

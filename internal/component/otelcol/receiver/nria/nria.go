@@ -2,9 +2,9 @@
 package nria
 
 import (
+	"slices"
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/datadogreceiver"
 	otelcomponent "go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pipeline"
 
@@ -12,8 +12,14 @@ import (
 	"github.com/grafana/alloy/internal/component/otelcol"
 	otelcolCfg "github.com/grafana/alloy/internal/component/otelcol/config"
 	"github.com/grafana/alloy/internal/component/otelcol/receiver"
+	"github.com/grafana/alloy/internal/component/otelcol/receiver/nria/nriareceiver"
 	"github.com/grafana/alloy/internal/featuregate"
 )
+
+// TODO: handle "connect" step and use it to populate entity data
+// TODO: cache metrics/resources/etc
+// TODO: generate logs from System events (user login, etc...)
+// TODO: generate logs from Inventory events (a new package is installed, etc...)
 
 func init() {
 	component.Register(component.Registration{
@@ -22,7 +28,7 @@ func init() {
 		Args:      Arguments{},
 
 		Build: func(opts component.Options, args component.Arguments) (component.Component, error) {
-			fact := datadogreceiver.NewFactory()
+			fact := nriareceiver.NewFactory()
 			return receiver.New(opts, fact, args.(Arguments))
 		},
 	})
@@ -47,8 +53,8 @@ var _ receiver.Arguments = Arguments{}
 func (args *Arguments) SetToDefault() {
 	*args = Arguments{
 		HTTPServer: otelcol.HTTPServerArguments{
-			Endpoint:              "localhost:4444",
-			CompressionAlgorithms: append([]string(nil), otelcol.DefaultCompressionAlgorithms...),
+			Endpoint:              ":4444",
+			CompressionAlgorithms: slices.Clone(otelcol.DefaultCompressionAlgorithms),
 		},
 		ReadTimeout: 60 * time.Second,
 	}
@@ -62,7 +68,7 @@ func (args Arguments) Convert() (otelcomponent.Config, error) {
 		return nil, err
 	}
 
-	return &datadogreceiver.Config{
+	return &nriareceiver.Config{
 		ServerConfig: *convertedHttpServer,
 		ReadTimeout:  args.ReadTimeout,
 	}, nil

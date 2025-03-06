@@ -65,7 +65,7 @@ func (nr *nriaReceiver) getEndpoints() []Endpoint {
 		// TODO: manage traces here
 	}
 
-	if nr.nextMetricsConsumer != nil {
+	//if nr.nextMetricsConsumer != nil {
 		endpoints = append(endpoints, []Endpoint{{
 			Pattern: "/infra/v2/metrics/events/bulk",
 			Handler: nr.handleV2BulkEvents,
@@ -73,11 +73,11 @@ func (nr *nriaReceiver) getEndpoints() []Endpoint {
 			Pattern: "/metrics/events/bulk",
 			Handler: nr.handleV2BulkEvents,
 		}}...)
-	}
+	//}
 	return endpoints
 }
 
-func newNRIAReceiver(config *Config, params receiver.Settings) (component.Component, error) {
+func newNRIAReceiver(config *Config, params receiver.Settings) (*nriaReceiver, error) {
 	instance, err := receiverhelper.NewObsReport(receiverhelper.ObsReportSettings{LongLivedCtx: false, ReceiverID: params.ID, Transport: "http", ReceiverCreateSettings: params})
 	if err != nil {
 		return nil, err
@@ -113,14 +113,16 @@ func (nr *nriaReceiver) Start(ctx context.Context, host component.Host) error {
 	}
 	hln, err := nr.config.ServerConfig.ToListener(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create datadog listener: %w", err)
+		return fmt.Errorf("failed to create nria listener: %w", err)
 	}
 
 	nr.anress = hln.Addr().String()
 
 	go func() {
+		nr.params.Logger.Info("******* listening", zap.String("address", nr.anress))
 		if err := nr.server.Serve(hln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			componentstatus.ReportStatus(host, componentstatus.NewFatalErrorEvent(fmt.Errorf("error starting datadog receiver: %w", err)))
+			nr.params.Logger.Error("error starting nria receiver", zap.Error(err))
+			componentstatus.ReportStatus(host, componentstatus.NewFatalErrorEvent(fmt.Errorf("error starting nria receiver: %w", err)))
 		}
 	}()
 	return nil
@@ -144,7 +146,7 @@ func (nr *nriaReceiver) handleConnect(writer http.ResponseWriter, request *http.
 	body, err := ioutil.ReadAll(request.Body)
 	if err != nil {
 		nr.params.Logger.Error("Reading request body", zap.Error(err))
-		writer.WriteHeader(http.StatusInternalServerError)
+		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -224,7 +226,7 @@ func (nr *nriaReceiver) handleV2BulkEvents(w http.ResponseWriter, req *http.Requ
 			metric := smetrics.Metrics().AppendEmpty()
 			metric.SetName(metricPrefix + "." + casing.CamelToDots(dp.Name))
 			// we receive everything as an absolute value so we are treating them as gauges
-			dps := metric.Gauge().DataPoints()
+			dps := metric.SetEmptyGauge().DataPoints()
 			dps.EnsureCapacity(1)
 			ddp := dps.AppendEmpty()
 			attrs.CopyTo(ddp.Attributes())

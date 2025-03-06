@@ -8,18 +8,15 @@ import (
 	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
-
-	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/datadogreceiver/internal/metadata"
 )
 
 // NewFactory creates a factory for DataDog receiver.
 func NewFactory() receiver.Factory {
 	return receiver.NewFactory(
-		metadata.Type,
+		component.MustNewType("nria"),
 		createDefaultConfig,
-		receiver.WithMetrics(createMetricsReceiver, metadata.MetricsStability),
-		receiver.WithTraces(createTracesReceiver, metadata.TracesStability))
+		receiver.WithMetrics(createMetricsReceiver, component.StabilityLevelStable)) // TODO: set development
+	//receiver.WithTraces(createTracesReceiver, metadata.TracesStability))
 }
 
 func createDefaultConfig() component.Config {
@@ -31,34 +28,14 @@ func createDefaultConfig() component.Config {
 	}
 }
 
-func createTracesReceiver(_ context.Context, params receiver.Settings, cfg component.Config, consumer consumer.Traces) (receiver.Traces, error) {
-	var err error
-	rcfg := cfg.(*Config)
-	r := receivers.GetOrAdd(rcfg, func() (dd component.Component) {
-		dd, err = newDataDogReceiver(rcfg, params)
-		return dd
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	r.Unwrap().(*nriaReceiver).nextTracesConsumer = consumer
-	return r, nil
-}
-
 func createMetricsReceiver(_ context.Context, params receiver.Settings, cfg component.Config, consumer consumer.Metrics) (receiver.Metrics, error) {
 	var err error
 	rcfg := cfg.(*Config)
-	r := receivers.GetOrAdd(cfg, func() (dd component.Component) {
-		dd, err = newDataDogReceiver(rcfg, params)
-		return dd
-	})
+	// todo: CACHE
+	dd, err := newNRIAReceiver(rcfg, params)
 	if err != nil {
 		return nil, err
 	}
-
-	r.Unwrap().(*nriaReceiver).nextMetricsConsumer = consumer
-	return r, nil
+	dd.nextMetricsConsumer = consumer
+	return dd, nil
 }
-
-var receivers = sharedcomponent.NewSharedComponents()
