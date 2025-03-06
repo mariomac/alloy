@@ -671,6 +671,7 @@ require (
 	github.com/mdlayher/vsock v1.2.1 // indirect
 	github.com/mdlayher/wifi v0.1.0 // indirect
 	github.com/metalmatze/signal v0.0.0-20210307161603-1c9aa721a97a // indirect
+	github.com/microsoft/go-mssqldb v1.8.0 // indirect
 	github.com/minio/asm2plan9s v0.0.0-20200509001527-cdd76441f9d8 // indirect
 	github.com/minio/c2goasm v0.0.0-20190812172519-36a3d3bbc4f3 // indirect
 	github.com/minio/minio-go v6.0.14+incompatible // indirect
@@ -710,7 +711,6 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/kafka v0.119.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/metadataproviders v0.119.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/pdatautil v0.119.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.119.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/splunk v0.119.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchperresourceattr v0.119.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal v0.119.0 // indirect
@@ -893,7 +893,8 @@ require (
 
 require (
 	github.com/grafana/beyla/v2 v2.0.4-alloy.2
-	github.com/microsoft/go-mssqldb v1.8.0
+	github.com/mariomac/guara v0.0.0-20250306093316-0985019a30d4
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.119.0
 )
 
 // NOTE: replace directives below must always be *temporary*.

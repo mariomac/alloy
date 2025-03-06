@@ -7,22 +7,27 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
+	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/mariomac/guara/pkg/casing"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componentstatus"
 	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
 	"go.opentelemetry.io/collector/receiver/receiverhelper"
 	"go.uber.org/zap"
 
+	"github.com/grafana/alloy/internal/component/otelcol/receiver/nria/nriareceiver/internal/datapoint"
 	"github.com/grafana/alloy/internal/component/otelcol/receiver/nria/nriareceiver/internal/nria"
 )
 
 type nriaReceiver struct {
 	anress string
-	config  *Config
-	params  receiver.Settings
+	config *Config
+	params receiver.Settings
 
 	nextTracesConsumer  consumer.Traces
 	nextMetricsConsumer consumer.Metrics
@@ -63,10 +68,10 @@ func (nr *nriaReceiver) getEndpoints() []Endpoint {
 	if nr.nextMetricsConsumer != nil {
 		endpoints = append(endpoints, []Endpoint{{
 			Pattern: "/infra/v2/metrics/events/bulk",
-			Handler: nr.handleBulkEvents,
+			Handler: nr.handleV2BulkEvents,
 		}, {
 			Pattern: "/metrics/events/bulk",
-			Handler: nr.handleBulkEvents,
+			Handler: nr.handleV2BulkEvents,
 		}}...)
 	}
 	return endpoints
@@ -135,31 +140,31 @@ func (nr *nriaReceiver) handleInfo(w http.ResponseWriter, _ *http.Request, infoR
 	}
 }
 
-func (fc *nriaReceiver) handleConnect(writer http.ResponseWriter, request *http.Request) {
+func (nr *nriaReceiver) handleConnect(writer http.ResponseWriter, request *http.Request) {
 	body, err := ioutil.ReadAll(request.Body)
 	if err != nil {
-		logrus.WithError(err).Error("Reading request body")
+		nr.params.Logger.Error("Reading request body", zap.Error(err))
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	req := struct {
 		Fingerprint nria.Fingerprint `json:"fingerprint"`
-		Type        string      `json:"type"`
-		Protocol    string      `json:"protocol"`
+		Type        string           `json:"type"`
+		Protocol    string           `json:"protocol"`
 		EntityID    nria.EntityID    `json:"entityId,omitempty"`
 	}{}
 
 	if err := json.Unmarshal(body, &req); err != nil {
-		logrus.WithError(err).Error("parsing request body mapeao")
+		nr.params.Logger.Error("parsing request body mapeao", zap.Error(err))
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if request.Method == http.MethodPost {
-		logrus.WithField("connect", req).Info("received connect fingerprint")
+		nr.params.Logger.Info("received connect fingerprint", zap.Any("connect", req))
 	} else if request.Method == http.MethodPut && req.EntityID > 0 {
-		logrus.WithField("reconnect", req).Info("received update fingerprint")
+		nr.params.Logger.Info("received update fingerprint", zap.Any("reconnect", req))
 	} else {
 		writer.WriteHeader(http.StatusBadRequest)
 	}
@@ -167,41 +172,72 @@ func (fc *nriaReceiver) handleConnect(writer http.ResponseWriter, request *http.
 	writer.WriteHeader(http.StatusOK)
 }
 
-func (nr *nriaReceiver) handleBulkEvents(w http.ResponseWriter, req *http.Request) {
-	// use datapoint.convert to get data
-	// then forward it using any of the examples below
-}
+func (nr *nriaReceiver) handleV2BulkEvents(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	// TODO: handle compression
+	datapoints, err := datapoint.ReadFrom(req.Body)
+	if err != nil {
+		nr.params.Logger.Error("Reading request body", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-// handleV2Series handles the v2 series endpoint https://docs.datadoghq.com/api/latest/metrics/#submit-metrics
-func (nr *nriaReceiver) handleV2Series(w http.ResponseWriter, req *http.Request) {
 	obsCtx := nr.tReceiver.StartMetricsOp(req.Context())
-	var err error
 	var metricsCount int
 	defer func(metricsCount *int) {
-		nr.tReceiver.EndMetricsOp(obsCtx, "datadog", *metricsCount, err)
+		nr.tReceiver.EndMetricsOp(obsCtx, "nria", *metricsCount, err)
 	}(&metricsCount)
 
-	series, err := nr.metricsTranslator.HandleSeriesV2Payload(req)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		nr.params.Logger.Error(err.Error())
-		return
-	}
+	nr.params.Logger.Info("received datapoints", zap.Int("len", len(datapoints)))
+	// use datapoint.convert to get data
+	for _, dpg := range datapoints {
+		// code below is highly unefficient as all the metrics and entities
+		// are recreated on every iteration
+		// TODO: cache everything
 
-	metrics := nr.metricsTranslator.TranslateSeriesV2(series)
-	metricsCount = metrics.DataPointCount()
+		// create resource with its metrics
+		otelResource := pcommon.NewResource()
+		otelResource.Attributes().PutStr("instance", strconv.Itoa(int(dpg.EntityID)))
+		metrics := pmetric.NewMetrics()
+		rmetrics := metrics.ResourceMetrics().AppendEmpty()
+		otelResource.MoveTo(rmetrics.Resource())
+		// create scope with its metrics
+		otelScope := pcommon.NewInstrumentationScope()
+		otelScope.SetName("nria")
+		otelScope.SetVersion("0.0.1") // todo: set me
+		smetrics := rmetrics.ScopeMetrics().AppendEmpty()
+		otelScope.MoveTo(smetrics.Scope())
 
-	err = nr.nextMetricsConsumer.ConsumeMetrics(obsCtx, metrics)
-	if err != nil {
-		errorutil.HTTPError(w, err)
-		nr.params.Logger.Error("metrics consumer errored out", zap.Error(err))
-		return
-	}
+		metricPrefix := casing.CamelToDots(dpg.SampleName)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	response := map[string]any{
-		"errors": []string{},
+		// TODO: cache too!
+		attrs := pcommon.NewMap()
+		for k, v := range dpg.MetricAttrs {
+			attrs.PutStr(k, v)
+		}
+
+		for _, dp := range dpg.DataPoints {
+			// create actual metrics
+			metric := smetrics.Metrics().AppendEmpty()
+			metric.SetName(metricPrefix + "." + casing.CamelToDots(dp.Name))
+			// we receive everything as an absolute value so we are treating them as gauges
+			dps := metric.Gauge().DataPoints()
+			dps.EnsureCapacity(1)
+			ddp := dps.AppendEmpty()
+			attrs.CopyTo(ddp.Attributes())
+			ddp.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(dp.TimestampSecs, 0)))
+			ddp.SetDoubleValue(dp.Value)
+		}
+
+		err := nr.nextMetricsConsumer.ConsumeMetrics(req.Context(), metrics)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			nr.params.Logger.Error("metrics consumer errored out", zap.Error(err))
+			return
+		}
 	}
-	_ = json.NewEncoder(w).Encode(response)
+	w.WriteHeader(http.StatusOK)
 }

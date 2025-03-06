@@ -10,7 +10,7 @@ metadata:
   namespace: rotelic
 data:
   alloy-cfg.river: |
-    otelcol.receiver.nri "default" {
+    otelcol.receiver.nria "default" {
       port = 4444
           
       output {

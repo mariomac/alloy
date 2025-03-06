@@ -1,5 +1,7 @@
 package nria
 
+type EntityID int64
+
 // Fingerprint is used in the agent connect step when communicating with the backend. Based on it
 // the backend will uniquely identify the agent and respond with the entityKey and entityId.
 type Fingerprint struct {

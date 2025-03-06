@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/grafana/alloy/internal/component/otelcol/receiver/nria/nriareceiver/internal/nria"
 )
 
 // TODO: convert also inventory and events
@@ -12,21 +14,21 @@ import (
 type nriaSamples []nriaEntitySample
 
 type nriaEntitySample struct {
-	// TODO: match entityID with regiester API to put here the entity name and other RESOURCE-level
-	EntityID uint64
+	// TODO: match entityID with register API to put here the entity name and other RESOURCE-level
+	EntityID nria.EntityID
 	Events   []map[string]interface{}
 }
 
 type DataPointGroup struct {
 	SampleName  string
-	EntityID    uint64
+	EntityID    nria.EntityID
 	MetricAttrs map[string]string
 	DataPoints  []DataPoint
 }
 
 type DataPoint struct {
 	Name        string
-	TimestampMS uint64 // we don't really need timestamp if not for traces
+	TimestampSecs int64 // we don't really need timestamp if not for traces
 	Value       float64
 }
 
@@ -50,13 +52,13 @@ func ReadFrom(nriaJSON io.Reader) ([]DataPointGroup, error) {
 }
 
 func convertDataPoint(event map[string]interface{}, d *DataPointGroup) {
-	var ts uint64
+	var ts int64
 	for key, val := range event {
 		if key == "eventType" {
 			// remove "Sample" from Samples, as the name is confusing
 			d.SampleName = strings.TrimSuffix(val.(string),"Sample")
 		} else if key == "timestamp" {
-			ts = uint64(val.(float64)) * 1000
+			ts = int64(val.(float64))
 		} else if strVal, ok := val.(string); ok {
 			d.MetricAttrs[key] = strVal
 		} else if numVal, ok := val.(float64); ok {
@@ -69,6 +71,6 @@ func convertDataPoint(event map[string]interface{}, d *DataPointGroup) {
 		}
 	}
 	for i := range d.DataPoints {
-		d.DataPoints[i].TimestampMS = ts
+		d.DataPoints[i].TimestampSecs = ts
 	}
 }
